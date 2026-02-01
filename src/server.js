@@ -20,6 +20,33 @@ const WORKSPACE_DIR =
 // Protect /setup with a user-provided password.
 const SETUP_PASSWORD = process.env.SETUP_PASSWORD?.trim();
 
+ // Protect /mc (Mission Control) with a user-provided password.
+const MC_PASSWORD = process.env.MC_PASSWORD?.trim();
+
+function requireMcAuth(req, res, next) {
+  if (!MC_PASSWORD) {
+    return res
+      .status(500)
+      .type("text/plain")
+      .send("MC_PASSWORD is not set. Set it in Railway Variables before using /mc.");
+  }
+
+  const header = req.headers.authorization || "";
+  const [scheme, encoded] = header.split(" ");
+  if (scheme !== "Basic" || !encoded) {
+    res.set("WWW-Authenticate", 'Basic realm="Mission Control"');
+    return res.status(401).send("Auth required");
+  }
+  const decoded = Buffer.from(encoded, "base64").toString("utf8");
+  const idx = decoded.indexOf(":");
+  const password = idx >= 0 ? decoded.slice(idx + 1) : "";
+  if (password !== MC_PASSWORD) {
+    res.set("WWW-Authenticate", 'Basic realm="Mission Control"');
+    return res.status(401).send("Invalid password");
+  }
+  return next();
+}
+
 // Debug logging helper
 const DEBUG = process.env.OPENCLAW_TEMPLATE_DEBUG?.toLowerCase() === "true";
 function debug(...args) {
@@ -499,6 +526,42 @@ function buildOnboardArgs(payload) {
   return args;
 }
 
+function missionControlDir() {
+  return path.join(WORKSPACE_DIR, "mission-control");
+}
+
+function tasksPath() {
+  return path.join(missionControlDir(), "TASKS.json");
+}
+
+function ensureMissionControlFiles() {
+  fs.mkdirSync(missionControlDir(), { recursive: true });
+
+  const p = tasksPath();
+  if (!fs.existsSync(p)) {
+    const initial = {
+      columns: [
+        { id: "inbox", name: "Inbox" },
+        { id: "doing", name: "Doing" },
+        { id: "review", name: "Review" },
+        { id: "done", name: "Done" }
+      ],
+      tasks: []
+    };
+    fs.writeFileSync(p, JSON.stringify(initial, null, 2) + "\n", "utf8");
+  }
+}
+
+function readTasks() {
+  ensureMissionControlFiles();
+  return JSON.parse(fs.readFileSync(tasksPath(), "utf8"));
+}
+
+function writeTasks(data) {
+  ensureMissionControlFiles();
+  fs.writeFileSync(tasksPath(), JSON.stringify(data, null, 2) + "\n", "utf8");
+}
+
 function runCmd(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     const proc = childProcess.spawn(cmd, args, {
@@ -873,6 +936,74 @@ app.get("/setup/export", requireSetupAuth, async (_req, res) => {
   });
 
   stream.pipe(res);
+});
+
+// Mission Control UI (protected)
+app.get("/mc", requireMcAuth, (_req, res) => {
+  res.sendFile(path.join(process.cwd(), "src", "public", "mc.html"));
+});
+
+app.get("/mc/app.js", requireMcAuth, (_req, res) => {
+  res.type("application/javascript");
+  res.sendFile(path.join(process.cwd(), "src", "public", "mc-app.js"));
+});
+
+app.get("/mc/styles.css", requireMcAuth, (_req, res) => {
+  res.type("text/css");
+  res.sendFile(path.join(process.cwd(), "src", "public", "mc-styles.css"));
+});
+
+// Mission Control API (protected)
+app.get("/mc/api/tasks", requireMcAuth, (_req, res) => {
+  const data = readTasks();
+  res.json(data);
+});
+
+app.post("/mc/api/tasks", requireMcAuth, (req, res) => {
+  const body = req.body || {};
+  if (!body.title) return res.status(400).json({ error: "title is required" });
+
+  const data = readTasks();
+  const task = {
+    id: crypto.randomUUID(),
+    title: String(body.title),
+    description: String(body.description || ""),
+    columnId: typeof body.columnId === "string" ? body.columnId : "inbox",
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    priority: body.priority === "low" || body.priority === "high" ? body.priority : "medium",
+    owner: String(body.owner || "Mitra"),
+    createdAt: new Date().toISOString(),
+  };
+
+  data.tasks.unshift(task);
+  writeTasks(data);
+  res.json({ ok: true, task });
+});
+
+app.patch("/mc/api/tasks", requireMcAuth, (req, res) => {
+  const body = req.body || {};
+  if (!body.id || !body.patch) return res.status(400).json({ error: "id and patch are required" });
+
+  const data = readTasks();
+  const idx = data.tasks.findIndex((t) => t.id === body.id);
+  if (idx === -1) return res.status(404).json({ error: "task not found" });
+
+  data.tasks[idx] = { ...data.tasks[idx], ...body.patch };
+  writeTasks(data);
+  res.json({ ok: true, task: data.tasks[idx] });
+});
+
+app.delete("/mc/api/tasks", requireMcAuth, (req, res) => {
+  const body = req.body || {};
+  if (!body.id) return res.status(400).json({ error: "id is required" });
+
+  const data = readTasks();
+  const before = data.tasks.length;
+  data.tasks = data.tasks.filter((t) => t.id !== body.id);
+  if (data.tasks.length === before) return res.status(404).json({ error: "task not found" });
+
+  writeTasks(data);
+  res.json({ ok: true });
 });
 
 // Proxy everything else to the gateway.

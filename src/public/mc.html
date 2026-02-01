@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Mission Control — TheToolNerd</title>
+    <link rel="stylesheet" href="/mc/styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hdr">
+        <div>
+          <h1>Mission Control — TheToolNerd</h1>
+          <p class="sub">Files-first task board (stored on /data/workspace/mission-control).</p>
+        </div>
+        <button id="refresh">Refresh</button>
+      </header>
+
+      <section class="create">
+        <input id="title" placeholder="New task title…" />
+        <input id="owner" placeholder="Owner (Akhil / Mitra)" value="Mitra" />
+        <select id="priority">
+          <option value="low">low</option>
+          <option value="medium" selected>medium</option>
+          <option value="high">high</option>
+        </select>
+        <button id="add">Add to Inbox</button>
+        <textarea id="desc" placeholder="Description (optional)"></textarea>
+      </section>
+
+      <div id="err" class="err" style="display:none"></div>
+      <main id="board" class="board"></main>
+    </div>
+
+    <script src="/mc/app.js"></script>
+  </body>
+</html>
