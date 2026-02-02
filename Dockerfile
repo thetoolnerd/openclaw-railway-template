@@ -95,3 +95,7 @@ USER openclaw
 ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "src/server.js"]
+
+# UPDATE THIS LINE:
+# We use sudo to take ownership of /data before starting the server
+CMD ["/bin/bash", "-c", "sudo mkdir -p /data && sudo chown -R openclaw:openclaw /data && node src/server.js"]
