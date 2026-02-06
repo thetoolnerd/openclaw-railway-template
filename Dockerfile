@@ -55,9 +55,31 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Install Global NPM Tools (Ampcode & Vercel)
+# 3. Install Global NPM Tools (Vercel)
 #    These will be placed in /usr/local/bin, accessible by everyone.
-RUN npm install -g vercel @sourcegraph/amp
+RUN npm install -g vercel 
+
+# 3.1 Install Developer CLIs (Global)
+
+# Supabase CLI
+RUN curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
+  | tar -xz -C /usr/local/bin supabase \
+  && chmod +x /usr/local/bin/supabase
+
+# Factory CLI
+RUN npm install -g factory-cli
+
+# Firecrawl CLI
+RUN npm install -g firecrawl-cli
+
+# Convex CLI
+RUN npm install -g convex
+
+
+# agent-browser + Chromium (heavy)
+RUN npm install -g agent-browser \
+  && agent-browser install
+
 
 # 4. Create 'openclaw' user with Passwordless Sudo
 RUN useradd -m -s /bin/bash openclaw \
