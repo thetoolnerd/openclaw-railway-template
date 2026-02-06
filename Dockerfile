@@ -66,8 +66,10 @@ RUN curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase
   | tar -xz -C /usr/local/bin supabase \
   && chmod +x /usr/local/bin/supabase
 
-# Factory CLI
-RUN npm install -g factory-cli
+# Factory CLI (official installer)
+RUN curl -fsSL https://app.factory.ai/cli | sh \
+  && ln -s /root/.factory/bin/factory /usr/local/bin/factory
+
 
 # Firecrawl CLI
 RUN npm install -g firecrawl-cli
